@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>적립매수 전략 백테스트 대시보드</title>
+<meta name="description" content="주식·ETF 과거 시세로 다양한 적립매수(DCA) 타이밍 전략을 백테스트하고 종목별 최적 전략을 찾아주는 대시보드" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app viz-root" id="app">
+
+  <header class="app-header">
+    <h1>📈 적립매수 전략 백테스트</h1>
+    <p>종목의 과거 시세로 매일·요일·이동평균·RSI·급락 등 다양한 적립 타이밍 전략을 비교하고, 종목별 최적 전략을 찾아보세요.</p>
+  </header>
+
+  <section class="card" id="settingsCard">
+    <h2><span class="num">1</span>공통 설정</h2>
+
+    <div class="field">
+      <label>백테스트 기간</label>
+      <div class="preset-row" id="periodPresets">
+        <button type="button" data-years="1">1년</button>
+        <button type="button" data-years="3">3년</button>
+        <button type="button" data-years="5" class="active">5년</button>
+        <button type="button" data-years="10">10년</button>
+        <button type="button" data-years="max">최대</button>
+      </div>
+      <div class="field-row">
+        <div>
+          <label for="startDate">시작일</label>
+          <input type="date" id="startDate" />
+        </div>
+        <div>
+          <label for="endDate">종료일</label>
+          <input type="date" id="endDate" />
+        </div>
+      </div>
+    </div>
+
+    <div class="field-row3">
+      <div class="field">
+        <label for="monthlyBudget">월 납입액</label>
+        <input type="number" id="monthlyBudget" value="1000000" min="1" step="10000" />
+      </div>
+      <div class="field">
+        <label for="payday">월급날(일)</label>
+        <input type="number" id="payday" value="25" min="1" max="28" />
+      </div>
+      <div class="field">
+        <label for="feePct">거래비용(%)</label>
+        <input type="number" id="feePct" value="0.35" min="0" max="5" step="0.01" />
+      </div>
+    </div>
+    <p class="hint">매수 시 거래비용(수수료+환전 스프레드)이 반영되며, 세금은 반영되지 않습니다. 조건이 맞지 않아 그 달에 매수하지 못한 금액은 이후로 이월되지 않고 투자되지 않은 것으로 계산됩니다.</p>
+  </section>
+
+  <nav class="tabbar">
+    <button type="button" class="tab-btn active" data-tab="single">단일 종목 분석</button>
+    <button type="button" class="tab-btn" data-tab="multi">종목별 최적 전략 비교</button>
+  </nav>
+
+  <!-- ===================== TAB 1: SINGLE TICKER ===================== -->
+  <div class="tabpanel active" id="tab-single">
+
+    <section class="card">
+      <h2><span class="num">2</span>종목 선택</h2>
+      <div class="ticker-search">
+        <input type="text" id="tickerInput" placeholder="종목명 또는 코드 입력 (예: VUG, 삼성전자, 005930)" autocomplete="off" />
+        <div class="search-results" id="tickerResults" style="display:none;"></div>
+      </div>
+      <div id="selectedTickerWrap"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">3</span>적립 전략 선택</h2>
+      <div id="strategyList"></div>
+
+      <div class="custom-builder">
+        <button type="button" class="btn-link" id="toggleCustomBuilder">＋ 직접 조건 추가하기</button>
+        <div id="customBuilderForm" style="display:none; margin-top:10px;">
+          <div class="field">
+            <label>기준 스케줄</label>
+            <select id="cbBase">
+              <option value="daily">매일 체크</option>
+              <option value="weekday">매주 특정 요일</option>
+              <option value="month_day">매월 특정일</option>
+              <option value="month_first">매월 첫 거래일</option>
+              <option value="month_last">매월 마지막 거래일</option>
+            </select>
+          </div>
+          <div class="custom-row" id="cbBaseParamRow" style="display:none;">
+            <div class="field" id="cbWeekdayField" style="display:none;">
+              <label>요일</label>
+              <select id="cbWeekday">
+                <option value="1">월요일</option>
+                <option value="2">화요일</option>
+                <option value="3">수요일</option>
+                <option value="4">목요일</option>
+                <option value="5" selected>금요일</option>
+              </select>
+            </div>
+            <div class="field" id="cbDayField" style="display:none;">
+              <label>매월 며칠</label>
+              <input type="number" id="cbDay" value="10" min="1" max="28" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label>조건 1 (필터)</label>
+            <select id="cbFilter1">
+              <option value="none">조건 없음 (스케줄만 적용)</option>
+              <option value="ma_below">이동평균선 아래일 때</option>
+              <option value="ma_above">이동평균선 위일 때</option>
+              <option value="rsi_le">RSI(14) 이하일 때</option>
+              <option value="rsi_ge">RSI(14) 이상일 때</option>
+              <option value="drop_ge">전일 대비 하락률 이상일 때</option>
+              <option value="rise_ge">전일 대비 상승률 이상일 때</option>
+            </select>
+          </div>
+          <div class="custom-row" id="cbFilter1ParamRow" style="display:none;"></div>
+
+          <div class="field" id="cbOpField" style="display:none;">
+            <label>결합 방식</label>
+            <select id="cbOp">
+              <option value="AND">그리고 (AND) — 둘 다 만족</option>
+              <option value="OR">또는 (OR) — 하나만 만족</option>
+            </select>
+          </div>
+
+          <div class="field" id="cbFilter2Wrap" style="display:none;">
+            <label>조건 2 (필터)</label>
+            <select id="cbFilter2">
+              <option value="none">조건 없음</option>
+              <option value="ma_below">이동평균선 아래일 때</option>
+              <option value="ma_above">이동평균선 위일 때</option>
+              <option value="rsi_le">RSI(14) 이하일 때</option>
+              <option value="rsi_ge">RSI(14) 이상일 때</option>
+              <option value="drop_ge">전일 대비 하락률 이상일 때</option>
+              <option value="rise_ge">전일 대비 상승률 이상일 때</option>
+            </select>
+          </div>
+          <div class="custom-row" id="cbFilter2ParamRow" style="display:none;"></div>
+
+          <button type="button" class="btn-secondary" id="cbAddBtn">전략 추가</button>
+        </div>
+      </div>
+    </section>
+
+    <button type="button" class="btn-primary" id="runSingleBtn">백테스트 실행</button>
+
+    <section class="card" id="singleResultsCard" style="display:none;">
+      <h2><span class="num">4</span>결과</h2>
+      <div id="singleStatus"></div>
+      <div id="singleChartArea" style="display:none;">
+        <div class="chart-legend" id="chartLegend"></div>
+        <div class="chart-wrap">
+          <svg class="chart" id="chartSvg" viewBox="0 0 640 260" preserveAspectRatio="none"></svg>
+          <div class="chart-tooltip" id="chartTooltip"></div>
+        </div>
+        <details style="margin-top:10px;">
+          <summary>데이터 표로 보기</summary>
+          <div style="overflow-x:auto; margin-top:8px;">
+            <table class="data-table" id="chartTable"></table>
+          </div>
+        </details>
+      </div>
+      <div id="singleResultsList"></div>
+      <div class="share-row" id="shareRow" style="display:none;">
+        <button type="button" class="btn-secondary" id="shareLinkBtn">🔗 이 결과 링크 복사</button>
+      </div>
+      <p class="disclaimer">과거 수익률은 미래 수익률을 보장하지 않습니다. 실제 매매 시 체결가·세금·환율 등에 따라 결과가 달라질 수 있습니다.</p>
+    </section>
+  </div>
+
+  <!-- ===================== TAB 2: MULTI TICKER ===================== -->
+  <div class="tabpanel" id="tab-multi">
+    <section class="card">
+      <h2><span class="num">2</span>비교할 종목 추가</h2>
+      <div class="ticker-search">
+        <input type="text" id="tickerInputMulti" placeholder="종목명 또는 코드 입력" autocomplete="off" />
+        <div class="search-results" id="tickerResultsMulti" style="display:none;"></div>
+      </div>
+      <div class="watchlist" id="watchlist"></div>
+      <p class="hint">위에서 선택한 공통 설정(기간·월 납입액·월급날·거래비용)과 [단일 종목 분석] 탭에서 체크된 전략 목록을 그대로 사용해 각 종목의 최적 전략을 찾습니다.</p>
+    </section>
+
+    <button type="button" class="btn-primary" id="runMultiBtn">전체 종목 백테스트 실행</button>
+
+    <section class="card" id="multiResultsCard" style="display:none;">
+      <h2><span class="num">3</span>종목별 최적 전략</h2>
+      <div id="multiStatus"></div>
+      <div class="multi-table" id="multiResultsList"></div>
+      <p class="disclaimer">각 종목에서 가장 높은 수익률을 기록한 전략을 자동으로 선택해 보여줍니다. 종목을 탭하면 [단일 종목 분석] 탭에서 상세 결과를 볼 수 있습니다.</p>
+    </section>
+  </div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>

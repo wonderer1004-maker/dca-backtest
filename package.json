@@ -1,0 +1,9 @@
+{
+  "name": "dca-backtest",
+  "private": true,
+  "version": "1.0.0",
+  "description": "적립매수(DCA) 전략 백테스트 대시보드",
+  "scripts": {
+    "dev": "netlify dev"
+  }
+}
