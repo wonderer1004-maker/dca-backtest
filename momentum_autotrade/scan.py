@@ -114,11 +114,29 @@ def market_ok(idx_close):
     return bool(idx_close.iloc[-1] > m20.iloc[-1] and m20.iloc[-1] > m60.iloc[-1])
 
 
+def _index_naver(symbol, count=300):
+    """네이버 지수 일봉 (종목 시세와 같은 출처라 날짜가 어긋나지 않음)"""
+    import requests
+    url = (f"https://fchart.stock.naver.com/sise.nhn?symbol={symbol}"
+           f"&timeframe=day&count={count}&requestType=0")
+    xml = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15).text
+    rows = re.findall(r'data="(\d{8})\|[^|]*\|[^|]*\|[^|]*\|([\d.]+)\|', xml)
+    if not rows:
+        raise RuntimeError("지수 데이터 없음")
+    s = pd.Series([float(c) for _, c in rows], index=pd.to_datetime([d for d, _ in rows]))
+    return s.sort_index()
+
+
 def load_market(start, now=None):
-    import FinanceDataReader as fdr
     out = {}
-    for m, sym in [("KOSPI", "KS11"), ("KOSDAQ", "KQ11")]:
-        idx = drop_unfinished_bar(fdr.DataReader(sym, start)["Close"].to_frame(), now)["Close"]
+    for m, naver_sym, fdr_sym in [("KOSPI", "KOSPI", "KS11"), ("KOSDAQ", "KOSDAQ", "KQ11")]:
+        try:
+            idx = _index_naver(naver_sym)
+        except Exception as e:
+            log(f"네이버 {m} 지수 실패({e}) → FinanceDataReader 사용")
+            import FinanceDataReader as fdr
+            idx = fdr.DataReader(fdr_sym, start)["Close"]
+        idx = drop_unfinished_bar(idx.to_frame("Close"), now)["Close"]
         out[m] = (market_ok(idx), idx.index[-1])
     return out
 
@@ -139,9 +157,8 @@ def run(limit=0, universe=None, prices=None, market=None, now=None):
         names.setdefault(code, p.get("name", ""))
 
     market = market or load_market(start, now)
-    data_date = max(d for _, d in market.values())
     for m, (ok, d) in market.items():
-        log(f"시장필터 {m}: {'통과(신규매수 가능)' if ok else '미통과(신규매수 중단)'}  기준일 {d:%Y-%m-%d}")
+        log(f"시장필터 {m}: {'통과(신규매수 가능)' if ok else '미통과(신규매수 중단)'}  지수 기준일 {d:%Y-%m-%d}")
 
     if prices is None:
         prices, t0 = {}, time.time()
@@ -155,9 +172,21 @@ def run(limit=0, universe=None, prices=None, market=None, now=None):
                 if i % 300 == 0:
                     log(f"시세 {i}/{len(codes)} ({time.time()-t0:.0f}초)")
 
+    # 기준일 = 종목 데이터에서 가장 많이 나온 마지막 날짜 (= 직전 거래일)
+    prices = {c: drop_unfinished_bar(df, now) for c, df in prices.items()}
+    lasts = pd.Series([df.index[-1] for df in prices.values() if len(df)])
+    if lasts.empty:
+        log("시세 데이터를 하나도 못 받음 → 인터넷 연결 확인")
+        return None
+    data_date = lasts.mode().iloc[0]
+    for m, (ok, d) in market.items():
+        if d != data_date:
+            log(f"경고: {m} 지수 날짜({d:%Y-%m-%d})가 종목 기준일({data_date:%Y-%m-%d})과 다름 → 시장필터 미통과로 처리")
+            market[m] = (False, d)
+    log(f"기준일 {data_date:%Y-%m-%d}")
+
     buys, sells = [], []
     for code, df in prices.items():
-        df = drop_unfinished_bar(df, now)
         if len(df) == 0 or df.index[-1] != data_date:
             continue                        # 거래정지 등으로 오늘 데이터 없음
         if code in held:
