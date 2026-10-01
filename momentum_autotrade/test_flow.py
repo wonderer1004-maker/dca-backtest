@@ -172,21 +172,26 @@ def main():
     a = prices["000010"]
     drop = a.iloc[[-1]].copy() * 0.85
     drop.index = [d2]
-    prices2 = {k: v for k, v in prices.items()}
+    prices2 = {}
+    for k, v in prices.items():                 # 모든 종목에 9/29 봉 추가 (A만 급락)
+        nxt = v.iloc[[-1]].copy()
+        nxt.index = [d2]
+        prices2[k] = pd.concat([v, nxt])
     prices2["000010"] = pd.concat([a, drop])
     mk2 = {"KOSPI": (True, d2), "KOSDAQ": (True, d2)}
     sig = scan.run(universe=uni, prices=prices2, market=mk2, now=dt.datetime(2026, 9, 29, 16, 0))
     check([s["code"] for s in sig["sells"]] == ["000010"], f"매도대상 {sig['sells']}")
     t3 = trader_core.Trader(b)
-    run_day(t3, b, dt.date(2026, 9, 30), {"000010": 9999.0})
-    check(not b.hold and not common.load_state()["positions"], "전량 매도, 상태 비움")
+    run_day(t3, b, dt.date(2026, 9, 30), {"000010": 9999.0, "000020": opens["000020"]})
+    check("000010" not in b.hold and "000010" not in common.load_state()["positions"], "A 전량 매도")
+    check("000020" in b.hold, "같은 날 새 신호(B)는 매수")
     tr = pd.read_csv(common.TRADES_FILE)
     check(len(tr) == 2 and tr.iloc[1]["매도가"] == 9999 and "20일선" in tr.iloc[1]["사유"], "매도 기록")
 
     print("[7] 휴장일: 주문 되돌리고 다음 거래일에 신호 재사용")
     os.remove(os.path.join(TMP, "signals_20260929.json"))   # 9/25 신호를 최신으로
+    common.save_state({"positions": {}, "last_signal_used": ""})
     scan.run(universe=uni, prices=prices, market=mk, now=dt.datetime.combine(d0, dt.time(16, 0)))
-    st = common.load_state(); st["last_signal_used"] = ""; common.save_state(st)
     b = FakeBroker(open_day=False)
     t4 = trader_core.Trader(b)
     run_day(t4, b, dt.date(2026, 9, 28), {})
