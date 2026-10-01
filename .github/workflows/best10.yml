@@ -35,14 +35,14 @@ jobs:
 
       - name: 백테스트 실행
         working-directory: condition_backtest
-        run: python best10.py --limit "${{ github.event.inputs.limit || '0' }}" 2>&1 | tee run.log
+        run: python best10.py --strict --limit "${{ github.event.inputs.limit || '0' }}" 2>&1 | tee run.log
 
       - name: 결과 저장(커밋)
         run: |
-          mkdir -p condition_backtest/results_best10
-          cp condition_backtest/run.log condition_backtest/results_best10/run.log
+          mkdir -p condition_backtest/results_best10_strict
+          cp condition_backtest/run.log condition_backtest/results_best10_strict/run.log
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add condition_backtest/results_best10
+          git add condition_backtest/results_best10_strict
           git commit -m "백테스트 결과 업데이트 [skip ci]" || echo "변경 없음"
           git push

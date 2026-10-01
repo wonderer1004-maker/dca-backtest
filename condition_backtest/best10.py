@@ -40,10 +40,13 @@ def cross_up(a, b):
     return (a > b) & (a.shift(1) <= b.shift(1))
 
 
+MIN_AMT = 20   # 20일 평균 거래대금 하한(억) — --strict 시 50
+
+
 def base(d):
     c, v = d["Close"], d["Volume"]
     amt20 = (c * v).rolling(20).mean()
-    return (c >= 1000) & (amt20 >= 20 * EOK)
+    return (c >= 1000) & (amt20 >= MIN_AMT * EOK)
 
 
 def vol_avg(v, n=20):
@@ -157,7 +160,7 @@ STRATS = [
 
 
 # ───────────────────────── 시장 필터 ─────────────────────────
-def load_market_filter(prices, uni, demo=False):
+def load_market_filter(prices, uni, demo=False, strict=False):
     """지수 종가 > 20일선 여부 (시장별). 지수 못 받으면 해당 시장 종목들로 동일가중 지수 생성"""
     out = {}
     for m, sym in [("KOSPI", "KS11"), ("KOSDAQ", "KQ11")]:
@@ -173,7 +176,7 @@ def load_market_filter(prices, uni, demo=False):
             codes = uni.loc[uni["Market"] == m, "Code"]
             rets = pd.DataFrame({c: prices[c]["Close"].pct_change() for c in codes if c in prices})
             idx = (1 + rets.median(axis=1).fillna(0)).cumprod()
-        out[m] = idx > ma(idx, 20)
+        out[m] = (idx > ma(idx, 20)) & ((ma(idx, 20) > ma(idx, 60)) if strict else True)
     return out
 
 
@@ -266,7 +269,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--demo", action="store_true")
+    ap.add_argument("--strict", action="store_true",
+                    help="시장필터 강화(지수 20일선 위 + 20일선>60일선) + 거래대금 50억")
     args = ap.parse_args()
+    global OUT_DIR, MIN_AMT
+    if args.strict:
+        OUT_DIR += "_strict"
+        MIN_AMT = 50
     t0 = time.time()
     if args.demo:
         uni, prices = make_demo()
@@ -275,7 +284,7 @@ def main():
         if args.limit:
             uni = uni.head(args.limit)
         prices = load_prices(uni["Code"].tolist())
-    mkt = load_market_filter(prices, uni, args.demo)
+    mkt = load_market_filter(prices, uni, args.demo, args.strict)
     market_of = uni.set_index("Code")["Market"].to_dict()
     names = uni.set_index("Code")["Name"].to_dict()
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -323,8 +332,8 @@ def main():
     yr = pd.DataFrame(yearly).T
     lines = ["# 새 조건검색식 10종 백테스트", "",
              f"- 실행: {pd.Timestamp.now(tz='Asia/Seoul'):%Y-%m-%d %H:%M} KST / 대상 {len(prices)}종목 / {TEST_START}~",
-             "- 공통: 주가 1,000원↑, 20일 평균 거래대금 20억↑ / 매수 = 신호 다음날 시가 / 비용 왕복 0.25%",
-             "- 시장필터: 해당 지수 종가 > 20일선일 때만 매수",
+             f"- 공통: 주가 1,000원↑, 20일 평균 거래대금 {MIN_AMT}억↑ / 매수 = 신호 다음날 시가 / 비용 왕복 0.25%",
+             "- 시장필터: 해당 지수 종가 > 20일선" + (" 그리고 지수 20일선 > 60일선" if args.strict else "") + "일 때만 매수",
              "- 매도: 손절가 / 추세이탈(종가 기준 → 다음날 시가) / 최대 보유일",
              f"- 포트 = 동시 최대 {SLOTS}종목, 종목당 자산의 1/{SLOTS}, 같은 날 신호 많으면 거래대금 큰 순",
              "- 상장폐지 종목 미포함 → 실제보다 다소 좋게 나올 수 있음", "",
