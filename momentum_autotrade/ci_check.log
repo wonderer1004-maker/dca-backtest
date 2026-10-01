@@ -17,29 +17,28 @@
   000010 상승A 436주 매수가 22,478 현재 22,478 (+0.0%) [보유]
   통과  추가 주문 없음
 [6] 20일선 이탈 → 스캐너가 매도대상 지정 → 다음날 매도
-  통과  매도대상 [{'code': '000010', 'name': '상승A', 'reason': '20일선 이탈', 'close': 18917.097892185975}]
-  000010 상승A 436주 매수가 22,478 현재 22,478 (+0.0%) [보유]
-  통과  전량 매도, 상태 비움
-  통과  매도 기록
-[7] 휴장일: 주문 되돌리고 다음 거래일에 신호 재사용
-  통과  포지션 없음, 신호 미사용 처리
-  000010 상승A 436주 매수가 22,478 현재 22,478 (+0.0%) [보유]
-  000020 상승B 196주 매수가 49,462 현재 49,462 (+0.0%) [보유]
-  통과  다음 거래일 매수 ['000010', '000020']
-[8] 주말엔 바로 종료
-  통과  토요일 종료
+  실패! 매도대상 []
+Traceback (most recent call last):
+  File "/home/runner/work/dca-backtest/dca-backtest/momentum_autotrade/test_flow.py", line 211, in <module>
+    main()
+  File "/home/runner/work/dca-backtest/dca-backtest/momentum_autotrade/test_flow.py", line 179, in main
+    check([s["code"] for s in sig["sells"]] == ["000010"], f"매도대상 {sig['sells']}")
+  File "/home/runner/work/dca-backtest/dca-backtest/momentum_autotrade/test_flow.py", line 118, in check
+    assert cond, msg
+           ^^^^
+AssertionError: 매도대상 []
 
-모든 테스트 통과
-
-### scan.py --limit 200
-[11:44:10] 시장필터 KOSPI: 미통과(신규매수 중단)  기준일 2026-09-17
-[11:44:10] 시장필터 KOSDAQ: 통과(신규매수 가능)  기준일 2026-09-17
-[11:44:37] 매수 후보 0개 (상위 30개 저장), 매도 대상 0개 → /home/runner/work/dca-backtest/dca-backtest/momentum_autotrade/data/signals_20260917.json
+### scan.py --limit 400
+[11:45:55] 시장필터 KOSPI: 미통과(신규매수 중단)  지수 기준일 2026-09-30
+[11:45:55] 시장필터 KOSDAQ: 통과(신규매수 가능)  지수 기준일 2026-09-30
+[11:46:47] 시세 300/400 (51초)
+[11:47:03] 기준일 2026-09-30
+[11:47:03] 매수 후보 0개 (상위 30개 저장), 매도 대상 0개 → /home/runner/work/dca-backtest/dca-backtest/momentum_autotrade/data/signals_20260930.json
 
 ### signals
 {
-  "data_date": "2026-09-17",
-  "created": "2026-10-01 11:44",
+  "data_date": "2026-09-30",
+  "created": "2026-10-01 11:45",
   "market_ok": {
     "KOSPI": false,
     "KOSDAQ": true
