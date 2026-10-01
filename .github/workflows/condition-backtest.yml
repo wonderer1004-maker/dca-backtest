@@ -1,0 +1,48 @@
+name: 조건검색식 백테스트
+
+on:
+  push:
+    branches: [condition-backtest]
+    paths:
+      - "condition_backtest/backtest.py"
+      - ".github/workflows/condition-backtest.yml"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "테스트할 종목 수 (0 = 전체)"
+        default: "0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: condition-backtest
+  cancel-in-progress: true
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 패키지 설치
+        run: pip install -r condition_backtest/requirements.txt
+
+      - name: 백테스트 실행
+        working-directory: condition_backtest
+        run: python backtest.py --limit "${{ github.event.inputs.limit || '0' }}" 2>&1 | tee run.log
+
+      - name: 결과 저장(커밋)
+        run: |
+          mkdir -p condition_backtest/results
+          cp condition_backtest/run.log condition_backtest/results/run.log
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add condition_backtest/results
+          git commit -m "백테스트 결과 업데이트 [skip ci]" || echo "변경 없음"
+          git push
